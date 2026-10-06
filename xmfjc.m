@@ -1,55 +1,64 @@
-// xmfjc.m — 醒目 APP 代理检测绕过插件
-// 原理：遍历运行时所有类，把 isProxy 方法的实现替换为恒返回 NO，
-// 让 App 的启动环境检测认为"未开代理"，从而不触发强制登出/清会话。
-// 不影响实际网络栈走系统代理（ProxyPin 仍可正常抓包）。
+// xmfjc.m — 醒目 APP 抓包掉线绕过插件 v2
 //
-// 7 天会话到期、手动退出登录等正常流程不在此 hook 范围内，保持原样。
+// 原理（基于 2026-10 逆向结论）：
+//   1. 该 App 客户端没有"检测代理/VPN -> 踢号"的代码。
+//      掉线链是：服务端风控判定异常 -> 响应带"会话失效/otherLogin"标志
+//      -> 客户端 HCEventAdapter.parseResponse:root: 收到标志
+//      -> 调 HCAppDelegate doLogout:（清本地账号/凭证/密码/cookie）
+//      -> 下次启动 startToLogin: 发现本地凭证没了 -> 进登录页（要短信验证码）。
+//   2. v2 方案：只掐掉"客户端配合清理"这一步：
+//      - hook doLogout:                -> 空操作（本地会话凭证保留）
+//      - hook showSessionExpiredDialog -> 空操作（不弹"会话过期"）
+//      效果：被踢后凭证仍在 -> 下次打开 App 走 requestLoginBackground
+//      用本地凭证静默恢复会话（不需要短信验证码）-> 无感不掉线。
+//   3. 不影响：短信验证登录、7 天凭证自然过期、正常业务流程。
+//      副作用：手动"退出登录"也会被吞（账号保持登录态）。
+//
+// 实现：纯 Objective-C runtime API（method_setImplementation），
+//       不依赖 CydiaSubstrate / theos，TrollFools 注入即可。
 
 #import <Foundation/Foundation.h>
 #import <objc/runtime.h>
 
+// 吞掉 doLogout: —— 阻止清空本地会话凭证/账号
+static id xmfjc_hook_doLogout(id self, SEL _cmd, ...) {
+    NSLog(@"[xmfjc] doLogout: blocked (keep local session)");
+    return nil;
+}
+
+// 吞掉"会话过期"弹窗
+static id xmfjc_hook_showSessionExpiredDialog(id self, SEL _cmd) {
+    NSLog(@"[xmfjc] showSessionExpiredDialog blocked");
+    return nil;
+}
+
 __attribute__((constructor))
 static void xmfjc_entry(void) {
     @autoreleasepool {
-        NSLog(@"[xmfjc] loaded v1");
+        NSLog(@"[xmfjc] loaded v2");
 
-        SEL proxySel = sel_registerName("isProxy");
-        int n = objc_getClassList(NULL, 0);
-        Class *classes = (Class *)malloc(sizeof(Class) * n);
-        n = objc_getClassList(classes, n);
-
-        int hooked = 0;
-        for (int i = 0; i < n; i++) {
-            Class cls = classes[i];
-            Method m = class_getInstanceMethod(cls, proxySel);
-            if (!m) continue;
-            const char *cn = class_getName(cls);
-
-            // 只处理 App 自己的类（避免误伤系统框架/第三方 SDK 的业务代理逻辑）
-            BOOL isAppClass = NO;
-            if (cn) {
-                NSString *name = [NSString stringWithUTF8String:cn];
-                if ([name hasPrefix:@"HC"] || [name hasPrefix:@"Holly"] ||
-                    [name hasPrefix:@"Basic"] || [name hasPrefix:@"XM"] ||
-                    [name containsString:@"Login"] || [name containsString:@"Net"] ||
-                    [name containsString:@"Env"] || [name containsString:@"Secur"]) {
-                    isAppClass = YES;
-                }
-            }
-            if (!isAppClass) {
-                NSLog(@"[xmfjc] skip isProxy on %s", cn ? cn : "?");
-                continue;
-            }
-
-            IMP newImp = imp_implementationWithBlock(^BOOL(id self) {
-                return NO;  // 始终报告"未走代理"
-            });
-            method_setImplementation(m, newImp);
-            hooked++;
-            NSLog(@"[xmfjc] hooked isProxy -> NO on %s", cn ? cn : "?");
+        Class cls = objc_getClass("HCAppDelegate");
+        if (!cls) {
+            NSLog(@"[xmfjc] ERROR: HCAppDelegate not found");
+            return;
         }
-        free(classes);
 
-        NSLog(@"[xmfjc] done, hooked %d class(es)", hooked);
+        Method m1 = class_getInstanceMethod(cls, @selector(doLogout:));
+        if (m1) {
+            method_setImplementation(m1, (IMP)xmfjc_hook_doLogout);
+            NSLog(@"[xmfjc] hooked doLogout: -> keep session");
+        } else {
+            NSLog(@"[xmfjc] ERROR: doLogout: not found on HCAppDelegate");
+        }
+
+        Method m2 = class_getInstanceMethod(cls, @selector(showSessionExpiredDialog));
+        if (m2) {
+            method_setImplementation(m2, (IMP)xmfjc_hook_showSessionExpiredDialog);
+            NSLog(@"[xmfjc] hooked showSessionExpiredDialog -> silent");
+        } else {
+            NSLog(@"[xmfjc] ERROR: showSessionExpiredDialog not found on HCAppDelegate");
+        }
+
+        NSLog(@"[xmfjc] v2 done");
     }
 }

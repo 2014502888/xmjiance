@@ -2,7 +2,7 @@ name: Build xmfjc.dylib
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master, main ]
   workflow_dispatch:
 
 jobs:
