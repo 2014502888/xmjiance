@@ -1,0 +1,29 @@
+name: Build xmfjc.dylib
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compile dylib (arm64)
+        run: |
+          xcrun -sdk iphoneos clang -arch arm64 -dynamiclib \
+            -miphoneos-version-min=13.0 -fobjc-arc \
+            -framework Foundation -framework UIKit \
+            -o xmfjc.dylib xmfjc.m
+          ls -la xmfjc.dylib
+          file xmfjc.dylib
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xmfjc-dylib
+          path: xmfjc.dylib
+          if-no-files-found: error
