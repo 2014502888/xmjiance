@@ -1,13 +1,13 @@
-# xmjiance — 醒目 APP 抓包不掉线插件（xmfjc.dylib）
+# xmjiance — 醒目 APP 抓包不掉线 + 越狱伪装插件（xmfjc.dylib）
 
-TrollStore / TrollFools 注入插件，解决"醒目 APP 在 iOS 上开代理抓包后，下次打开被要求重新登录（短信验证码）"的问题。
+TrollStore / TrollFools 注入插件，解决"醒目 APP 在 iOS 上开代理抓包后，下次打开被要求重新登录（短信验证码）"的问题，并阻止友盟 / 阿里百川 SDK 把越狱设备上报为"越狱"。
 
 ## 版本
 
-- **v2（当前）**：基于逆向结论重写。
-  - hook `HCAppDelegate.doLogout:` → 空操作（保留本地会话凭证/账号，不被服务端"会话失效"标志清空）
-  - hook `HCAppDelegate.showSessionExpiredDialog` → 空操作（不弹"会话过期"）
-  - 效果：被踢后凭证保留 → 下次打开自动用本地凭证静默恢复会话（不走短信验证码）→ 无感不掉线
+- **v3（当前）**：
+  - **会话保护**：hook `HCAppDelegate.doLogout:` → 空操作（保留本地会话凭证/账号，不被服务端"会话失效"标志清空）；hook `HCAppDelegate.showSessionExpiredDialog` → 空操作（不弹"会话过期"）。被踢后凭证保留 → 下次打开自动用本地凭证静默恢复会话（不走短信验证码）→ 无感不掉线。
+  - **越狱检测伪装**：逆向确认越狱检测来自两个第三方 SDK —— 友盟 UM（探测 Cydia.app / var/lib/apt 等路径 + 写 `/private/umTest_Jailbreak` 写测试）和阿里百川 ALBBDeviceInfo（探测 2 个路径）。v3 从源头 hook 文件探测 API（`NSFileManager fileExistsAtPath:`/`isDirectory:`/`createFileAtPath:`/`contentsOfFileAtPath:`、`NSString writeToFile:`、`NSData writeToFile:`），命中越狱特征路径一律返回"不存在 / 写入失败" → 两个 SDK 均判定"未越狱"，`is_jailbroken` 上报为 NO。
+- v2：仅会话保护（无越狱伪装）。
 - v1（废弃）：hook `isProxy` 恒返 NO —— 逆向证实该 App 无任何代码调用 `isProxy`，方案无效。
 
 ## 使用
@@ -20,4 +20,5 @@ TrollStore / TrollFools 注入插件，解决"醒目 APP 在 iOS 上开代理抓
 
 - 手动"退出登录"也会被吞（账号保持登录态）
 - 7 天凭证自然到期仍会要求短信验证码（正常流程，未拦截）
+- 越狱伪装只拦越狱特征路径（Cydia/apt/bash/umTest 等），App 正常文件读写不受影响
 - 抓包期间 App 的流量本身仍可能被服务端风控，建议抓完包关闭代理再打开 App
