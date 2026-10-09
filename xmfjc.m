@@ -1,4 +1,4 @@
-// xmfjc.m — 醒目 APP 抓包不掉线 + 越狱伪装 + 统计域名拦截 + 会话过期弹窗兜底 插件 v5
+// xmfjc.m — 醒目 APP 抓包不掉线 + 越狱伪装 + 统计域名拦截 + 会话过期弹窗兜底 + 截图限制绕过 插件 v6
 //
 // 原理（基于 2026-10 逆向结论）：
 //   1. 该 App 客户端没有"检测代理/VPN -> 踢号"的代码。
@@ -30,7 +30,14 @@
 //        便于确认插件在拦截（用户无法直接看 NSLog）。
 //      - 逆向同时确认：isDeviceJailBreak / isExpireDateWithDate: 均为从未被调用的死代码，
 //        掉线并非本地过期判断或 App 主动越狱检测触发。
-//   6. 不影响：短信验证登录、7 天凭证自然过期、App 正常文件读写与业务请求。
+//   6. v6 新增（2026-10-09）：截图限制绕过（合并原"去除截图限制.dylib"功能，少注入一个插件）。
+//      - 逆向确认醒目通过监听系统通知 UIApplicationUserDidTakeScreenshotNotification 感知用户截图。
+//      - iOS 截图链路：用户截图 -> 系统调用 UIApplication 私有方法 _handleScreenshot:
+//        -> 随后发出 UIApplicationUserDidTakeScreenshotNotification。
+//      - 方案：把 UIApplication _handleScreenshot: 替换为空实现 -> 系统不再发截图通知
+//        -> 醒目收不到"用户截图"事件 -> 防截图/防截屏检测失效。
+//      - 与原"去除截图限制.dylib"完全同原理（它也是 hook 该方法），合并后无需再注入它。
+//   7. 不影响：短信验证登录、7 天凭证自然过期、App 正常文件读写与业务请求。
 //      副作用：手动"退出登录"会被吞（账号保持登录态）。
 //
 // 实现：纯 Objective-C runtime API（method_setImplementation），
@@ -328,11 +335,32 @@ static void my_sendAsync(id self, SEL _cmd, NSURLRequest *req, NSOperationQueue 
     orig_sendAsync(self, _cmd, req, q, completion);
 }
 
+// ============ 6. 截图限制绕过（v6，合并原"去除截图限制.dylib"） ============
+// 醒目监听系统通知 UIApplicationUserDidTakeScreenshotNotification 感知截图。
+// iOS 截图链路：用户截图 -> 系统调用 UIApplication 私有方法 _handleScreenshot:
+//   -> 随后发出 UIApplicationUserDidTakeScreenshotNotification。
+// 把 _handleScreenshot: 替换为空实现 -> 系统不再发截图通知 -> App 检测失效。
+// 用 imp_implementationWithBlock（block 首参 self，与实例方法签名匹配）。
+static void xmfjc_bypassScreenshotLimit(void) {
+    Class appCls = [UIApplication class];
+    SEL sel = sel_registerName("_handleScreenshot");
+    Method m = class_getInstanceMethod(appCls, sel);
+    if (m) {
+        IMP imp = imp_implementationWithBlock(^(id self, id shot) {
+            // 吞掉截图处理：系统不会发 UIApplicationUserDidTakeScreenshotNotification
+        });
+        method_setImplementation(m, imp);
+        NSLog(@"[xmfjc] hooked UIApplication _handleScreenshot (screenshot limit bypassed)");
+    } else {
+        NSLog(@"[xmfjc] WARN: UIApplication _handleScreenshot not found (iOS changed? screenshot limit not bypassed)");
+    }
+}
+
 // ============ 注入入口 ============
 __attribute__((constructor))
 static void xmfjc_entry(void) {
     @autoreleasepool {
-        NSLog(@"[xmfjc] loaded v3");
+        NSLog(@"[xmfjc] loaded v6");
 
         // --- 1. 会话保护 ---
         Class appDel = objc_getClass("HCAppDelegate");
@@ -454,13 +482,16 @@ static void xmfjc_entry(void) {
             NSLog(@"[xmfjc] hooked UIAlertView show");
         }
 
+        // --- 5. 截图限制绕过（v6） ---
+        xmfjc_bypassScreenshotLimit();
+
         // 启动诊断：确认插件生效（每次安装/重装后首启弹一次）
         NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
         if (![ud boolForKey:@"xmfjc_ready_toast"]) {
             [ud setBool:YES forKey:@"xmfjc_ready_toast"];
-            xmfjc_toast(@"✓ xmfjc v5 已生效（会话保护+伪装+拦截+弹窗兜底）");
+            xmfjc_toast(@"✓ xmfjc v6 已生效（会话保护+伪装+拦截+弹窗兜底+截图绕过）");
         }
 
-        NSLog(@"[xmfjc] v5 done");
+        NSLog(@"[xmfjc] v6 done");
     }
 }

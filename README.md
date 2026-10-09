@@ -1,12 +1,18 @@
-# xmjiance — 醒目 APP 抓包不掉线 + 越狱伪装 + 统计拦截 + 会话过期弹窗兜底 插件（xmfjc.dylib）
+# xmjiance — 醒目 APP 抓包不掉线 + 越狱伪装 + 统计拦截 + 会话过期弹窗兜底 + 截图限制绕过 插件（xmfjc.dylib）
 
-TrollStore / TrollFools 注入插件，解决"醒目 APP 在 iOS 上开代理抓包后，下次打开被要求重新登录（短信验证码）"的问题；阻止友盟 / 阿里百川 SDK 把越狱设备上报为"越狱"；拦截两个 SDK 每次启动的统计/画像上报流量。
+TrollStore / TrollFools 注入插件，解决"醒目 APP 在 iOS 上开代理抓包后，下次打开被要求重新登录（短信验证码）"的问题；阻止友盟 / 阿里百川 SDK 把越狱设备上报为"越狱"；拦截两个 SDK 每次启动的统计/画像上报流量；绕过 App 的防截图检测（合并原「去除截图限制.dylib」功能，少注入一个插件）。
 
 ## 版本
 
-- **v5（当前，2026-10-09）**：
+- **v6（当前，2026-10-09）**：
+  - 在 v5 基础上新增**截图限制绕过**（合并原「去除截图限制.dylib」）：
+    - 逆向确认醒目通过监听系统通知 `UIApplicationUserDidTakeScreenshotNotification` 感知用户截图。
+    - iOS 截图链路：用户截图 → 系统调用 `UIApplication` 私有方法 `_handleScreenshot:` → 随后发出截图通知。
+    - 方案：把 `_handleScreenshot:` 替换为空实现 → 系统不再发截图通知 → App 防截图检测失效。
+    - 与原「去除截图限制.dylib」完全同原理（它也是 hook 该方法），合并后无需再注入它。
+- **v5（2026-10-09）**：
   - 在 v4 基础上新增**会话过期弹窗通用兜底**：hook `UIViewController presentViewController:animated:completion:` + `UIAlertView show`，标题/内容命中会话失效关键词（会话过期 / 登录已失效 / 重新登录 / 已过期等）一律吞掉不弹。不依赖 App 内部走哪个类、哪条路径弹"会话过期"（逆向确认弹窗不走 `showSessionExpiredDialog`，v4 拦不到）。
-  - 新增**诊断提示**：每次安装/重装后首启弹一次「✓ xmfjc v5 已生效」；每次拦截到会话失效时弹「已拦截会话失效，凭证保留」。方便直接确认插件在拦截（不需要看 NSLog）。
+  - 新增**诊断提示**：每次安装/重装后首启弹一次「✓ xmfjc v6 已生效」；每次拦截到会话失效时弹「已拦截会话失效，凭证保留」。方便直接确认插件在拦截（不需要看 NSLog）。
   - 逆向确认（基于 醒目-80.ipa）：`isDeviceJailBreak` / `isExpireDateWithDate:` 均为从未被调用的死代码——掉线**不是**本地过期判断、**不是** App 主动越狱检测触发；掉线走的是服务端主动失效 + 客户端另一条弹窗路径。
 - **v4**：
   - **会话保护**：hook `HCAppDelegate.doLogout:` → 空操作（保留本地会话凭证/账号，不被服务端"会话失效"标志清空）；hook `HCAppDelegate.showSessionExpiredDialog` → 空操作（不弹"会话过期"）。被踢后凭证保留 → 下次打开自动用本地凭证静默恢复会话（不走短信验证码）→ 无感不掉线。
