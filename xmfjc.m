@@ -146,8 +146,8 @@ static void xmfjc_toast(NSString *text) {
 }
 
 // UIViewController presentViewController:animated:completion: —— 吞"会话过期"弹窗
-static void (*orig_presentVC)(id, SEL, id, BOOL, id);
-static void my_presentVC(id self, SEL _cmd, id vc, BOOL animated, id completion) {
+static void (*orig_presentVC)(id, SEL, id, BOOL, void (^)(void));
+static void my_presentVC(id self, SEL _cmd, id vc, BOOL animated, void (^completion)(void)) {
     if (vc && [vc isKindOfClass:NSClassFromString(@"UIAlertController")]) {
         NSString *ttl = [vc valueForKey:@"title"];
         NSString *msg = [vc valueForKey:@"message"];
