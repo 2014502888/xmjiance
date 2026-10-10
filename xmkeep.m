@@ -27,7 +27,9 @@
 #import <objc/runtime.h>
 
 // ============ 1. 后台任务无限续命 ============
-static UIBackgroundTaskIdentifier xmkeep_bgTask = UIBackgroundTaskInvalid;
+// 注意：UIBackgroundTaskInvalid 是 UIKit 的 extern 运行时常量，不能用于静态初始化；
+// 其实际值为 0，静态初始化直接用 0（运行时比较仍用 UIBackgroundTaskInvalid）。
+static UIBackgroundTaskIdentifier xmkeep_bgTask = 0;
 
 static void xmkeep_renewBackgroundTask(void) {
     // 上一任务结束掉，重新申请（iOS 对反复续命有策略限制，尽力延长）
