@@ -1,4 +1,4 @@
-# xmkeep — 万能后台保活插件（整合版，xmkeep.dylib）
+# houtaicz — 万能后台保活插件（整合版，houtaicz.dylib）
 
 纯 Objective-C 写的通用后台保活插件，整合了市面两个常见插件的优点，无第三方框架依赖（无 CydiaSubstrate / theos / fishhook），TrollFools 注入任意 App 即可。
 
@@ -17,22 +17,22 @@
 
 ```objc
 // 想开启定位保活：注入前先在目标 App 的 NSUserDefaults 里写入（或用调试工具设置）
-[[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"xmkeep_location"];
+[[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"houtaicz_location"];
 // 关闭（默认）：
-//   [[NSUserDefaults standardUserDefaults] setBool:NO forKey:@"xmkeep_location"];
+//   [[NSUserDefaults standardUserDefaults] setBool:NO forKey:@"houtaicz_location"];
 ```
 
 ## 使用
 
-1. GitHub Actions 编译产物：artifact 里的 `xmkeep.dylib`
+1. GitHub Actions 编译产物：artifact 里的 `houtaicz.dylib`
 2. 用 TrollFools 注入目标 App
 3. 重启 App 生效；切后台即开始保活，回前台自动停止
 
 ## 与 xmjiance 插件的关系
 
 - `xmfjc.dylib`（xmjiance）：醒目专用（会话保护 + 越狱伪装 + 统计拦截 + 弹窗兜底 + 截图绕过）
-- `xmkeep.dylib`（本插件）：**通用后台保活**，可注入任何需要后台常驻的 App
-- 两个插件互不依赖，可同时注入（如醒目 = xmfjc + xmkeep）
+- `houtaicz.dylib`（本插件）：**通用后台保活**，可注入任何需要后台常驻的 App
+- 两个插件互不依赖，可同时注入（如醒目 = xmfjc + houtaicz）
 
 ## 说明与限制
 
