@@ -1,4 +1,4 @@
-name: Build xmfjc.dylib
+name: Build dylibs
 
 on:
   push:
@@ -12,7 +12,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Compile dylib (arm64)
+      - name: Compile xmfjc.dylib (arm64)
         run: |
           xcrun -sdk iphoneos clang -arch arm64 -dynamiclib \
             -miphoneos-version-min=13.0 -fobjc-arc \
@@ -21,9 +21,21 @@ jobs:
           ls -la xmfjc.dylib
           file xmfjc.dylib
 
-      - name: Upload artifact
+      - name: Compile xmkeep.dylib (arm64)
+        run: |
+          xcrun -sdk iphoneos clang -arch arm64 -dynamiclib \
+            -miphoneos-version-min=13.0 -fobjc-arc \
+            -framework Foundation -framework UIKit \
+            -framework AVFoundation -framework CoreLocation \
+            -o xmkeep.dylib xmkeep.m
+          ls -la xmkeep.dylib
+          file xmkeep.dylib
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: xmfjc-dylib
-          path: xmfjc.dylib
+          name: xm-dylibs
+          path: |
+            xmfjc.dylib
+            xmkeep.dylib
           if-no-files-found: error
